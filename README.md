@@ -11,14 +11,15 @@ IV. [Insights and Recommendations](#iv-insights-and-recommendations) <br/>
 
 ⚓**Business goals:** 
 
-This project analyzes 500K+ e-commerce logs to detect conversion drop-offs, assess traffic source performance and find cross-sell opportunities, helping improve user journey and conversion rates.
+Use SQL in BigQuery to evaluate sales performance, product growth, regional demand, discount impact, customer retention, inventory movement, and pending orders in order to support revenue growth, stock planning, and customer-focused decision-making.
 
 ❓**Business questions:**
-- Which traffic sources bring the most valuable customers and revenue?
-- How well do users move through the purchase funnel from product view to add-to-cart to purchase?
-- How do browsing and purchasing behaviors differ between buyers and non-buyers?
-- How effectively is the website converting traffic into sales and revenue?
-- Which products are frequently bought together and could support cross-sell opportunities?
+- Which product subcategories drive the most sales and order volume?
+- Which subcategories and territories show the strongest growth and demand over time?
+- How much do seasonal discounts affect sales value by subcategory?
+- How well does the business retain successfully shipped customers?
+- Are inventory levels aligned with sales demand, or are there stock efficiency issues?
+- How many orders remain pending, and what revenue is tied up in them?
 
 ## II. DATASET
 
@@ -27,28 +28,9 @@ This project analyzes 500K+ e-commerce logs to detect conversion drop-offs, asse
 
 <details>
   
-<summary>See data table in detailed</summary>
+<summary>See the tables and data schema in detail</summary>
 
-
-| Field Name | Data Type | Description |
-|----------|----------|----------|
-| fullVisitorId   | String   | The unique visitor ID     |
-| date      | String     | The date of the session in YYYYMMDD format      |
-| totals      | Record     | This section contains aggregate values across the session      |
-| totals.bounces      | Integer     | Total bounces (for convenience). For a bounced session, the value is 1, otherwise it is null      |
-| totals.hits      | Integer     | Total number of hits within the session      |
-| totals.pageviews      | Integer     | Total number of pageviews within the session      |
-| totals.visits     | Integer     | The number of sessions (for convenience). This value is 1 for sessions with interaction events. The value is null if there are no interaction events in the session      |
-| totals.transactions      | Integer     | Total number of ecommerce transactions within the session      |
-| trafficSource.source      | String     | The source of the traffic source. Could be the name of the search engine, the referring hostname, or a value of the utm_source URL parameter      |
-| hits      | Record     | This row and nested fields are populated for any and all types of hits      |
-| hits.eCommerceAction      | Record     | This section contains all of the ecommerce hits that occurred during the session. This is a repeated field and has an entry for each hit that was collected      |
-| hits.eCommerceAction.action_type      | String     | The action type. Click through of product lists = 1, Product detail views = 2, Add product(s) to cart = 3, Remove product(s) from cart = 4, Check out = 5, Completed purchase = 6, Refund of purchase = 7, Checkout options = 8, Unknown = 0. Usually this action type applies to all the products in a hit, with the following exception: when hits.product.isImpression = TRUE, the corresponding product is a product impression that is seen while the product action is taking place (i.e., a "product in list view")      |
-| hits.product      | Record     | This row and nested fields will be populated for each hit that contains Enhanced Ecommerce PRODUCT data      |
-| hits.product.productQuantity      | Integer     | The quantity of the product purchased      |
-| hits.product.productRevenue      | Integer     | The revenue of the product, expressed as the value passed to Analytics multiplied by 10^6 (e.g., 2.40 would be given as 2400000)      |
-| hits.product.productSKU      | String     | Product SKU      |
-| hits.product.v2ProductName      | String     | Product Name     |
+![drawSQL-image-export-2026-04-07](https://github.com/user-attachments/assets/a7d7b8ab-34a2-4079-8ced-30f3a282e215)
 
 </details>
 
@@ -56,30 +38,114 @@ This project analyzes 500K+ e-commerce logs to detect conversion drop-offs, asse
 
 This project includes 8 queries
 
-### 🔍 Query 1. Calculate total visit, pageview, transaction for January-August 2017 (order by month).
+### 🔍 Query 1. Calculate Quantity of items, Sales value & Order quantity by each Subcategory in the last 12 months.
 
-This query is to measure total visits, page views, transactions for each month from January to August in 2017. The result identifies overall trend and growth in the site
+This query measures which product subcategories contributed the most to recent sales performance, and the result shows the item volume, revenue, and number of orders generated by each subcategory in the last 12 months.
 
 🚀 **Query**
 ```sql
-SELECT 
-  FORMAT_DATE('%Y%m', parse_date('%Y%m%d', date)) AS month
-  ,SUM(totals.visits) AS visits
-  ,SUM(totals.pageviews) AS pageview
-  ,SUM(totals.transactions) AS transactions
-  ,ROUND(100 * SAFE_DIVIDE(SUM(totals.transactions), SUM(totals.visits)), 2) AS conversion_rate_pct
+SELECT
+      FORMAT_DATETIME('%b %Y', o.ModifiedDate) AS period
+      ,ps.Name
+      ,SUM(o.OrderQty) AS qty_item
+      ,SUM(o.LineTotal) AS total_sales
+      ,COUNT(DISTINCT o.SalesOrderID) AS order_cnt
+FROM `adventureworks2019.Sales.SalesOrderDetail` o 
+LEFT JOIN `adventureworks2019.Production.Product` p
+  ON o.ProductID = p.ProductID
+LEFT JOIN `adventureworks2019.Production.ProductSubcategory` ps
+  ON p.ProductSubcategoryID = CAST(ps.ProductSubcategoryID AS string)
 
-FROM `bigquery-public-data.google_analytics_sample.ga_sessions_2017*` 
-GROUP BY month
-ORDER BY month;
+WHERE DATE(o.ModifiedDate) >=  (SELECT DATE_SUB(DATE(MAX(o.ModifiedDate)), INTERVAL 12 month)
+                                FROM `adventureworks2019.Sales.SalesOrderDetail` )
+GROUP BY period, Name
+ORDER BY period DESC, total_sales DESC, qty_item DESC, Name;
 ```
 
 💡**Query result**
 
-<img width="911" height="305" alt="image" src="https://github.com/user-attachments/assets/c93ba95c-696d-49ca-97ce-3aeb22f21db3" />
+<img width="1666" height="604" alt="image" src="https://github.com/user-attachments/assets/0c689f5b-4fcb-432c-be76-fab641ca1acb" />
 
 **Key-takeaway:**
-May had the highest conversion rate (1.77%) while July brought peak volume (71.8k visits, 270k page views) but a relatively low conversion rate (1.49%).
+- Revenue was concentrated in core bike products, showing that bikes were the main sales driver, while apparel and accessories contributed more to volume than to revenue.
+
+### 🔍 Query 2. Calculate % YoY growth rate by SubCategory & release top 3 categories with highest growth rate, using metric quantity_item
+
+This query measures which product subcategories contributed the most to recent sales performance, and the result shows the item volume, revenue, and number of orders generated by each subcategory in the last 12 months.
+
+🚀 **Query**
+```sql
+WITH sales_quantity AS (--get sales quantity per year per subcategory
+  SELECT 
+    EXTRACT(YEAR FROM s.ModifiedDate) AS year
+    ,ps.Name AS Name
+    ,SUM(s.OrderQty) AS qty_item
+    
+  FROM `adventureworks2019.Sales.SalesOrderDetail` AS s
+    LEFT JOIN `adventureworks2019.Production.Product` AS p 
+    ON s.ProductID = p.ProductID
+    LEFT JOIN `adventureworks2019.Production.ProductSubcategory` AS ps 
+    ON CAST(p.ProductSubcategoryID AS int64) = ps.ProductSubcategoryID
+                                  
+  GROUP BY year, Name 
+  ORDER BY year, Name
+)
+
+,prev_quantity AS (--compare quantity this year vs. previous year for each subcategory
+  SELECT 
+    Name
+    ,year
+    ,qty_item
+    ,LAG(qty_item) OVER(PARTITION BY Name ORDER BY year) AS prv_qty
+  FROM sales_quantity
+)
+
+,YoY_rate AS (--calculate YoY growth rate = qty_item / prv_qty - 1
+  SELECT
+    Name
+    ,year
+    ,qty_item
+    ,prv_qty
+    ,ROUND(qty_item / prv_qty - 1, 2) AS qty_diff
+  FROM prev_quantity
+)
+
+,rnk AS (--get rank for qty_diff
+  SELECT 
+    Name
+    ,year
+    ,qty_item
+    ,prv_qty
+    ,qty_diff
+    ,DENSE_RANK() OVER(ORDER BY qty_diff DESC) AS rn
+  FROM YoY_rate
+  )
+
+SELECT 
+  Name
+  ,qty_item
+  ,prv_qty
+  ,qty_diff
+FROM rnk
+WHERE rn <= 3 --filter top 3 from ranking
+ORDER BY qty_diff DESC;
+```
+
+💡**Query result**
+
+<img width="1282" height="238" alt="image" src="https://github.com/user-attachments/assets/c624e061-f77e-4512-a01f-cb6d5532d810" />
+
+**Key-takeaway:**
+- The fastest YoY growth came from Mountain Frames, Socks, and Road Frames, with item quantities growing about 5.2x, 4.2x, and 3.9x versus the prior year, suggesting strong demand acceleration in both selected bike components and accessory products.
+
+### 🔍 Query 3. Calculate % YoY growth rate by SubCategory & release top 3 categories with highest growth rate, using metric quantity_item
+
+This query measures which product subcategories contributed the most to recent sales performance, and the result shows the item volume, revenue, and number of orders generated by each subcategory in the last 12 months.
+
+🚀 **Query**
+```sql
+
+```
 
 ## IV. INSIGHTS AND RECOMMENDATIONS
 
