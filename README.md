@@ -138,7 +138,7 @@ ORDER BY qty_diff DESC;
 **Key-takeaway:**
 - The fastest YoY growth came from Mountain Frames, Socks, and Road Frames, with item quantities growing about 5.2x, 4.2x, and 3.9x versus the prior year, suggesting strong demand acceleration in both selected bike components and accessory products.
 
-### 🔍 Query 3. Calculate % YoY growth rate by SubCategory & release top 3 categories with highest growth rate, using metric quantity_item
+### 🔍 Query 3. Ranking Top 3 TeritoryID with biggest Order Quantity of every year.
 
 This query compares regional demand across years, and the result shows the top 3 territories with the highest order quantity in each year.
 
@@ -280,7 +280,7 @@ ORDER BY month_join,month_diff;
 <img width="1022" height="654" alt="image" src="https://github.com/user-attachments/assets/e77069a5-b56e-4144-9900-9a0e202a5d14" />
 
 **Key-takeaway:**
-- Retention dropped quickly across all months customer cohorts. Most customers purchased only in their joining month (M-0), while repeat purchases fell sharply in later months. A few early cohorts showed a small rebound around M-3, suggesting limited but visible delayed repeat buying.
+- Retention dropped quickly across customer cohorts. Most customers purchased only in their joining month (M-0), while repeat purchases fell sharply in later months. A few early cohorts showed a small rebound around M-3, suggesting limited but visible delayed repeat buying.
 
 ### 🔍 Query 6. Trend of Stock level & MoM difference rate by all product in 2011. If the rate is null then 0.
 
@@ -294,12 +294,9 @@ WITH stock_qty_count AS (--count stock quantity by month, year and product in 20
     ,EXTRACT(MONTH FROM w.ModifiedDate) AS month
     ,EXTRACT(YEAR FROM w.ModifiedDate) AS year
     ,SUM(w.StockedQty) AS stock_qty
-    ,SUM(s.OrderQty) AS sales_qty
   FROM `adventureworks2019.Production.WorkOrder` w  
   LEFT JOIN `adventureworks2019.Production.Product` p
   ON p.ProductID = w.ProductID
-  LEFT JOIN `adventureworks2019.Sales.SalesOrderDetail` s
-  ON w.ProductID = s.ProductID
   WHERE EXTRACT(YEAR FROM w.ModifiedDate) = 2011
   GROUP BY p.Name, month, year
 )
@@ -310,36 +307,28 @@ WITH stock_qty_count AS (--count stock quantity by month, year and product in 20
     ,month
     ,year
     ,stock_qty
-    ,sales_qty
     ,LAG(stock_qty) OVER (PARTITION BY Name ORDER BY month) AS stock_prv
-    ,LAG(sales_qty) OVER (PARTITION BY Name ORDER BY month) AS sales_prv
   FROM stock_qty_count
-  GROUP BY Name, month, year, stock_qty, sales_qty
+  GROUP BY Name, month, year, stock_qty
 )
 
 SELECT 
   Name
   ,month
   ,year
-  ,sales_qty
   ,stock_qty
   ,stock_prv
   ,CASE WHEN stock_prv is null then 0 
         WHEN stock_prv is not null 
-          then ROUND(100 * COALESCE((stock_qty - stock_prv) / stock_prv, 0), 1)
-        END AS diff_stock
-  ,CASE
-        WHEN sales_prv is null then 0
-        WHEN sales_prv is not null 
-          then ROUND(100 * COALESCE((sales_qty - sales_prv) / sales_prv, 0), 1) 
-        END AS diff_sales
+          then ROUND(100 * COALESCE((stock_qty - stock_prv) / stock_prv, 0), 1) 
+        END AS diff
 FROM stock_prv_month
 ORDER BY Name, year, month;
 ```
 
 💡**Query result**
 
-<img width="1132" height="376" alt="image" src="https://github.com/user-attachments/assets/a6a4c3e0-40d0-4dcb-828f-472b27fde905" />
+<img width="1774" height="604" alt="image" src="https://github.com/user-attachments/assets/f9895854-8ae5-4991-8dd8-2eb0f1d95772" />
 
 **Key-takeaway:**
 - Stock levels were closely influenced by demand and replenishment cycles, with major inventory build-ups in July and October followed by gradual drawdowns in later months.
