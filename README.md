@@ -28,7 +28,20 @@ Use SQL in BigQuery to evaluate sales performance, product growth, regional dema
 
 <details>
   
-<summary>See the tables and data schema in detail</summary>
+<summary>See the main tables used in this dataset</summary>
+- **SalesOrderHeader** (31,465 rows): Order-level sales information, including customer, territory, status, and totals.
+- **SalesOrderDetail** (121,317 rows): Line-level sales records with product, quantity, price, discount, and line total.
+- **Product** (504 rows): Master product table with attributes, pricing, and category links.
+- **ProductSubcategory** (37 rows): Groups products into subcategories under broader product categories.
+- **SpecialOffer** (16 rows): Promotion lookup table with discount type, category, and valid date range.
+- **PurchaseOrderHeader** (4,012 rows): Purchase order summary data for vendors, dates, status, and total amounts.
+- **WorkOrder** (72591 rows): Manufacturing work orders tracking production quantities, schedules, and scrap details.
+
+</details>
+
+
+<details>  
+<summary>See the data schema in detail</summary>
 
 ![drawSQL-image-export-2026-04-07](https://github.com/user-attachments/assets/a7d7b8ab-34a2-4079-8ced-30f3a282e215)
 
